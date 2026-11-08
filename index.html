@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tracker</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tracker">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+<script src="config.js"></script>
+<script src="supabase.js"></script>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#fcfcfb; --panel:#ffffff; --ink:#0b0b0b; --ink2:#52514e; --muted:#8a8984;
+  --line:#e8e7e3; --line2:#f1f0ed; --accent:#2a78d6; --accent-soft:#e6eefa; --accent-dim:#a9c6ec;
+  --danger:#c93a39; --ok:#1a7f4b;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    color-scheme:dark;
+    --bg:#121211; --panel:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#85847d;
+    --line:#2c2c2a; --line2:#222220; --accent:#3987e5; --accent-soft:#1d2a3b; --accent-dim:#2c4d78;
+    --danger:#e66767; --ok:#4cc38a;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);min-height:100vh;overscroll-behavior-y:none}
+button{touch-action:manipulation;-webkit-user-select:none;user-select:none}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+.wrap{max-width:780px;margin:0 auto;padding:12px 16px 48px}
+
+/* header */
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:4px 0 12px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tabs{display:flex;background:var(--line2);border-radius:8px;padding:2px}
+.tab{padding:5px 12px;border-radius:6px;font-weight:500;color:var(--ink2)}
+.tab[aria-selected=true]{background:var(--panel);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.datenav{display:flex;align-items:center;gap:2px;margin-left:auto}
+.iconbtn{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;color:var(--ink2)}
+.iconbtn:hover:not(:disabled){background:var(--line2);color:var(--ink)}
+.iconbtn:disabled{opacity:.3;cursor:default}
+.datelabel{min-width:92px;text-align:center;font-weight:600}
+.todaybtn{font-size:12px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;color:var(--ink2)}
+.todaybtn:hover{color:var(--ink);border-color:var(--muted)}
+.sync{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.sync i{width:6px;height:6px;border-radius:50%;background:var(--muted);display:inline-block}
+.sync[data-s=saved] i{background:var(--ok)}
+.sync[data-s=saving] i{background:var(--accent)}
+.sync[data-s=error] i,.sync[data-s=offline] i{background:var(--danger)}
+
+/* generic */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:14px}
+.stat{padding:10px 12px;border-left:1px solid var(--line)}
+.stat:first-child{border-left:0}
+.stat b{display:block;font-size:20px;font-weight:600;letter-spacing:-.02em;line-height:1.2}
+.stat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.stat small{font-size:11px;color:var(--ink2);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card{border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:14px}
+.cardhead{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line2);font-size:12px;color:var(--ink2);font-weight:500}
+.cardhead .r{display:flex;gap:10px;align-items:center}
+.link{font-size:12px;color:var(--ink2);text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--line)}
+.link:hover{color:var(--ink)}
+.chart{padding:8px 8px 4px;height:156px}
+.chart svg{display:block;width:100%;height:140px;overflow:visible}
+.legend{display:flex;gap:10px;font-size:11px;color:var(--muted);font-weight:400}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:0}
+form.add{display:flex;gap:6px;margin-bottom:14px}
+.inp{font-size:16px;height:36px;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:0 10px;outline:none;min-width:0}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.btn{height:36px;padding:0 14px;border-radius:8px;background:var(--ink);color:var(--bg);font-weight:600;white-space:nowrap}
+.btn:hover{opacity:.88}
+.btn.ghost{background:none;color:var(--ink2);border:1px solid var(--line);font-weight:500}
+.btn.ghost[aria-pressed=true]{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.empty{padding:18px 12px;color:var(--muted);font-size:13px}
+
+/* habits */
+.hrow,.hhead{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line2)}
+.hhead{border-top:0;padding-top:6px;padding-bottom:2px}
+.hrow:first-of-type{border-top:0}
+.chk{width:26px;height:26px;border-radius:7px;border:1.5px solid var(--line);display:grid;place-items:center;transition:background .08s}
+.chk:hover{border-color:var(--accent)}
+.chk[aria-checked=true]{background:var(--accent);border-color:var(--accent);color:#fff}
+.chk svg{opacity:0}
+.chk[aria-checked=true] svg{opacity:1}
+.hname{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hmeta{font-size:12px;color:var(--muted);margin-top:1px}
+.hmeta b{color:var(--ink2);font-weight:600}
+.strip{display:grid;grid-auto-flow:column;grid-auto-columns:16px;gap:3px}
+.cell{width:16px;height:16px;border-radius:4px;background:var(--line2);border:1px solid transparent}
+.cell.on{background:var(--accent)}
+.cell.pre{opacity:.35}
+.cell.sel{outline:1.5px solid var(--ink2);outline-offset:1px}
+.cell.fut{visibility:hidden}
+.dl{width:16px;text-align:center;font-size:10px;color:var(--muted)}
+.dl.sel{color:var(--ink);font-weight:600}
+.erow{display:flex;gap:6px;align-items:center;padding:6px 12px;border-top:1px solid var(--line2)}
+.erow:first-of-type{border-top:0}
+.erow .inp{flex:1;height:32px}
+.del{font-size:12px;color:var(--danger);padding:6px 8px;border-radius:6px}
+.del:hover{background:var(--line2)}
+.del.arm{background:var(--danger);color:#fff}
+
+/* food */
+.pbox{padding:14px 12px 12px}
+.ptop{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.pbig{font-size:34px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.pgoal{color:var(--muted);font-size:15px}
+.pgoal button{color:var(--ink2);text-decoration:underline dotted;text-underline-offset:3px}
+.pleft{margin-left:auto;font-size:13px;color:var(--ink2)}
+.pleft.hit{color:var(--ok);font-weight:600}
+.bar{height:8px;background:var(--line2);border-radius:4px;margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width .2s}
+.goalset{display:flex;gap:6px;align-items:center;margin-top:2px}
+.goalset .inp{width:90px;height:32px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:15px;font-size:13px;background:var(--panel)}
+.chip:hover{border-color:var(--accent)}
+.chip em{font-style:normal;color:var(--muted);font-size:12px}
+.chip.recent{border-style:dashed}
+.chip .x{color:var(--danger);font-weight:600;margin-left:2px}
+.lrow{display:grid;grid-template-columns:44px 1fr auto 28px;gap:8px;align-items:center;padding:7px 12px;border-top:1px solid var(--line2)}
+.lrow:first-of-type{border-top:0}
+.lrow .t{color:var(--muted);font-size:12px}
+.lrow .g{font-weight:600}
+.lrow .rm{color:var(--muted);width:28px;height:28px;border-radius:6px}
+.lrow .rm:hover{color:var(--danger);background:var(--line2)}
+.food-add .inp.l{flex:1}
+.food-add .inp.n{width:84px}
+
+/* greeting */
+.hello{padding:6px 0 12px}
+.hello h1{font-size:22px;font-weight:700;letter-spacing:-.02em;margin:0}
+.hello p{margin:3px 0 0;color:var(--ink2);font-size:13px}
+.hello p b{color:var(--ink);font-weight:600}
+.hello p .ok{color:var(--ok);font-weight:600}
+
+/* exercise */
+.erow2,.ehead{display:grid;grid-template-columns:1fr auto 30px;gap:12px;align-items:center;padding:9px 12px;border-top:1px solid var(--line2)}
+.ehead{border-top:0;padding-top:6px;padding-bottom:0}
+.ehead + .erow2{border-top:0}
+.wk{display:grid;grid-template-columns:repeat(7,24px);gap:3px}
+.wk .dl{width:24px}
+.wcell{width:24px;height:24px;border-radius:6px;background:var(--line2);font-size:11px;font-weight:600;color:#fff;display:grid;place-items:center}
+.wcell.on{background:var(--accent)}
+.wcell.sel{outline:1.5px solid var(--ink2);outline-offset:1px}
+.wcell:disabled{opacity:.3;cursor:default}
+.eprog{display:flex;align-items:center;gap:8px;margin-top:4px}
+.eprog .bar{flex:1;max-width:140px;margin:0;height:5px}
+.eprog span{font-size:12px;color:var(--muted);white-space:nowrap}
+.eprog span.ok{color:var(--ok);font-weight:600}
+.plus{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);color:var(--ink2);font-size:17px;line-height:1}
+.plus:hover{border-color:var(--accent);color:var(--accent)}
+.tgt{width:64px!important;flex:none!important}
+
+/* auth + footer */
+#auth{position:fixed;inset:0;z-index:20;background:var(--bg);display:grid;place-items:center;padding:24px;padding-top:calc(24px + env(safe-area-inset-top))}
+.authbox{width:100%;max-width:340px}
+.authbox h1{font-size:26px;letter-spacing:-.02em;margin:0 0 4px}
+.authbox p{color:var(--ink2);margin:0 0 18px}
+.authbox form{display:grid;gap:8px}
+.authbox .inp{height:44px}
+.authbox .btn{height:44px}
+.authbox code{background:var(--line2);padding:1px 5px;border-radius:4px;font-size:12px}
+#authMsg{color:var(--danger);font-size:13px;min-height:18px;margin-top:8px}
+#authSwitch{margin-top:6px}
+footer{display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:center;font-size:12px;color:var(--muted);padding:8px 0 20px}
+footer .link{color:var(--muted)}
+
+#tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:4px 7px;border-radius:5px;white-space:nowrap;z-index:10;opacity:0;transform:translate(-50%,-100%);margin-top:-8px}
+[hidden]{display:none!important}
+
+@media (max-width:560px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .stat:nth-child(3){border-left:0}
+  .stat:nth-child(n+3){border-top:1px solid var(--line)}
+  .strip{grid-auto-columns:14px}
+  .cell,.dl{width:14px}.cell{height:14px}
+  .datenav{margin-left:0}
+  header .sync{margin-left:auto}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hello"><h1 id="hello"></h1><p id="summary"></p></div>
+  <header>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="habits">Habits</button>
+      <button class="tab" role="tab" data-tab="food">Food</button>
+      <button class="tab" role="tab" data-tab="exercise">Exercise</button>
+    </div>
+    <div class="datenav">
+      <button class="iconbtn" id="prev" aria-label="Previous day"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M9 2 4 7l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="datelabel" id="datelabel"></div>
+      <button class="iconbtn" id="next" aria-label="Next day"><svg width="14" height="14" viewBox="0 0 14 14"><path d="m5 2 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="todaybtn" id="today" hidden>Today</button>
+    </div>
+    <div class="sync" id="sync" data-s="local"><i></i><span>Loading</span></div>
+  </header>
+
+  <!-- HABITS -->
+  <section id="v-habits" hidden>
+    <form class="add" id="habitForm" autocomplete="off">
+      <input class="inp" id="habitName" placeholder="New habit, e.g. Read 20 min" maxlength="60" style="flex:1">
+      <button class="btn" type="submit">Add</button>
+    </form>
+    <div class="stats" id="hStats"></div>
+    <div class="card">
+      <div class="cardhead"><span id="hListTitle">Habits</span><div class="r"><button class="link" id="hEdit">Edit</button></div></div>
+      <div id="hList"></div>
+    </div>
+    <div class="card" id="hChartCard">
+      <div class="cardhead"><span>Daily completion · 30 days</span><span class="legend">click a bar to jump to that day</span></div>
+      <div class="chart" id="hChart"></div>
+    </div>
+  </section>
+
+  <!-- FOOD -->
+  <section id="v-food" hidden>
+    <div class="card"><div class="pbox" id="pBox"></div></div>
+    <form class="add food-add" id="foodForm" autocomplete="off">
+      <input class="inp l" id="fLabel" placeholder="Food (optional)" maxlength="40">
+      <input class="inp n" id="fGrams" placeholder="Grams" inputmode="decimal" type="number" min="0" step="any">
+      <button class="btn ghost" type="button" id="fSave" aria-pressed="false" title="Also save as a quick add">Save</button>
+      <button class="btn" type="submit">Add</button>
+    </form>
+    <div class="card" id="chipCard">
+      <div class="cardhead"><span>Quick add</span><div class="r"><button class="link" id="pEdit">Edit</button></div></div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><span id="logTitle">Log</span><span id="logCount"></span></div>
+      <div id="log"></div>
+    </div>
+    <div class="stats" id="fStats"></div>
+    <div class="card">
+      <div class="cardhead"><span>Protein · 30 days</span><span class="legend"><span><i style="background:var(--accent)"></i>goal hit</span><span><i style="background:var(--accent-dim)"></i>under</span><span>- - goal</span></span></div>
+      <div class="chart" id="fChart"></div>
+    </div>
+  </section>
+
+  <!-- EXERCISE -->
+  <section id="v-exercise" hidden>
+    <div class="stats" id="eStats"></div>
+    <div class="card">
+      <div class="cardhead"><span id="eTitle">This week</span><div class="r"><button class="link" id="eEdit">Edit</button></div></div>
+      <div id="eList"></div>
+    </div>
+    <form class="add" id="exForm" autocomplete="off">
+      <input class="inp" id="exName" placeholder="Session type, e.g. Gym" maxlength="30" style="flex:1">
+      <input class="inp tgt" id="exTarget" type="number" inputmode="numeric" min="1" max="21" placeholder="/wk">
+      <button class="btn" type="submit">Add</button>
+    </form>
+    <div class="card" id="eChartCard">
+      <div class="cardhead"><span>Weekly target met · 12 weeks</span><span class="legend"><span><i style="background:var(--accent)"></i>all done</span><span><i style="background:var(--accent-dim)"></i>partial</span></span></div>
+      <div class="chart" id="eChart"></div>
+    </div>
+  </section>
+</div>
+<footer><span id="acct"></span><button class="link" id="exportBtn">Export backup</button><button class="link" id="importBtn">Import</button><input type="file" id="importFile" accept="application/json,.json" hidden><button class="link" id="signOut">Sign out</button></footer>
+<div id="auth" hidden data-mode="signin">
+  <div class="authbox">
+    <h1>Hi, Charlie</h1>
+    <p>Sign in to sync your habits, protein and training across your devices.</p>
+    <div id="authSetup" hidden><p>Almost there: add your Supabase project URL and publishable key to <code>config.js</code>, then reload. See README.md.</p></div>
+    <form id="authForm" autocomplete="on">
+      <input class="inp" id="authEmail" type="email" placeholder="Email" autocomplete="username" required>
+      <input class="inp" id="authPass" type="password" placeholder="Password" autocomplete="current-password" minlength="6" required>
+      <button class="btn" id="authSubmit" type="submit">Sign in</button>
+      <button class="link" id="authSwitch" type="button">First time? Create account</button>
+    </form>
+    <div id="authMsg"></div>
+  </div>
+</div>
+<div id="tip"></div>
+
+<script>
+(() => {
+/* ---------- dates ---------- */
+const pad = n => String(n).padStart(2, '0');
+const dkey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
+const addD = (k, n) => { const d = parse(k); d.setDate(d.getDate()+n); return dkey(d); };
+const todayK = () => dkey(new Date());
+const fmtD = k => parse(k).toLocaleDateString('en-IE', {weekday:'short', day:'numeric', month:'short'});
+const fmtShort = k => parse(k).toLocaleDateString('en-IE', {day:'numeric', month:'short'});
+const monthId = k => 'm-' + k.slice(0, 7);
+const newId = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = n => Math.round(n * 10) / 10;
+const $ = id => document.getElementById(id);
+
+/* ---------- state ---------- */
+let docs = {};
+const TABS = ['habits', 'food', 'exercise'];
+const S = { tab: TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'habits', sel: todayK(), editH: false, editP: false, editE: false, saveP: false, editGoal: false, armed: null };
+let lastToday = todayK();
+
+const blankCfg = () => ({ habits: [], goals: [], presets: [], ex: [] });
+const exTypes = () => cfg().ex || [];
+const exOn = k => (month(k).ex || {})[k] || [];
+const weekStart = k => addD(k, -((parse(k).getDay() + 6) % 7));
+const exCount = (tid, ws) => { let n = 0; for (let i = 0; i < 7; i++) { const c = exOn(addD(ws, i))[tid]; if (c) n += c; } return n; };
+const activeTypes = ws => exTypes().filter(x => x.created <= addD(ws, 6));
+function weekScore(ws) {
+  const ts = activeTypes(ws);
+  if (!ts.length) return null;
+  let got = 0, need = 0;
+  for (const x of ts) { need += x.target; got += Math.min(exCount(x.id, ws), x.target); }
+  return { got, need, pct: got / need, typesDone: ts.filter(x => exCount(x.id, ws) >= x.target).length, types: ts.length };
+}
+function weekStreak() {
+  let w = weekStart(todayK());
+  const cur = weekScore(w);
+  if (!(cur && cur.pct >= 1)) w = addD(w, -7);
+  let n = 0;
+  while (n < 520) { const s = weekScore(w); if (s && s.pct >= 1) { n++; w = addD(w, -7); } else break; }
+  return n;
+}
+const cfg = () => docs.config || blankCfg();
+const month = k => docs[monthId(k)] || {};
+const checksOn = k => (month(k).checks || {})[k] || [];
+const foodOn = k => (month(k).food || {})[k] || [];
+const totalOn = k => foodOn(k).reduce((a, e) => a + (+e.g || 0), 0);
+const goalOn = k => { let g = null; for (const x of cfg().goals) if (x.from <= k) g = x.g; return g; };
+const done = (h, k) => checksOn(k).includes(h.id);
+
+/* ---------- persistence (Supabase) ---------- */
+const CFG = window.TRACKER_CONFIG || {};
+const TABLE = 'tracker_docs';
+let sb = null, uid = null, userEmail = '', inflightId = null, flushT = null, status = 'local', pulling = false;
+const dirty = new Set();
+const cacheKey = () => 'tracker:v1:' + (uid || 'local');
+function cacheSave() {
+  try { localStorage.setItem(cacheKey(), JSON.stringify({ docs, dirty: [...dirty, inflightId].filter(Boolean) })); } catch (e) {}
+}
+function cacheLoad(key) {
+  try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+}
+function setStatus(s) {
+  status = s;
+  const el = $('sync'); el.dataset.s = s;
+  el.querySelector('span').textContent = {
+    local: 'This device only', connecting: 'Connecting', saving: 'Saving', saved: 'Synced',
+    offline: 'Offline · saved on device', error: 'Sync error · retrying'
+  }[s] || s;
+}
+function mutate(id, fn) {
+  const cur = docs[id] ? structuredClone(docs[id]) : (id === 'config' ? blankCfg() : { checks: {}, food: {}, ex: {} });
+  fn(cur);
+  cur.u = Date.now();
+  docs[id] = cur;
+  dirty.add(id);
+  cacheSave();
+  scheduleFlush();
+  render();
+}
+function scheduleFlush(ms = 400) {
+  if (!sb || !uid) return;
+  setStatus(navigator.onLine ? 'saving' : 'offline');
+  clearTimeout(flushT);
+  flushT = setTimeout(flush, ms);
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function pushDoc(id) {
+  const { error } = await sb.from(TABLE).upsert({ user_id: uid, doc_id: id, data: docs[id], updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+async function flush() {
+  if (inflightId || !sb || !uid) return;
+  while (dirty.size) {
+    const id = dirty.values().next().value;
+    dirty.delete(id); inflightId = id;
+    let ok = true;
+    try { await pushDoc(id); }
+    catch (e) {
+      await sleep(700 + Math.random() * 800);
+      try { await pushDoc(id); } catch (e2) { ok = false; }
+    }
+    inflightId = null;
+    if (!ok) { dirty.add(id); cacheSave(); setStatus(navigator.onLine ? 'error' : 'offline'); return; }
+  }
+  cacheSave();
+  setStatus('saved');
+}
+async function pull(first) {
+  if (!sb || !uid || pulling) return;
+  pulling = true;
+  try {
+    const { data, error } = await sb.from(TABLE).select('doc_id,data');
+    if (error) throw error;
+    if (first && !data.length) Object.keys(docs).forEach(k => dirty.add(k)); // first sign-in: upload local data
+    for (const r of data) {
+      const id = r.doc_id, v = r.data;
+      if (!v || dirty.has(id) || inflightId === id) continue;
+      if (docs[id] && (docs[id].u || 0) > (v.u || 0)) { dirty.add(id); continue; }
+      docs[id] = v;
+    }
+    cacheSave();
+    if (dirty.size) scheduleFlush(50); else setStatus('saved');
+    render();
+  } catch (e) {
+    setStatus(navigator.onLine ? 'error' : 'offline');
+  } finally { pulling = false; }
+}
+setInterval(() => { if (dirty.size && !inflightId) flush(); }, 15000);
+setInterval(() => { if (!document.hidden) pull(); }, 30000);
+window.addEventListener('online', () => { flush(); pull(); });
+window.addEventListener('offline', () => setStatus('offline'));
+window.addEventListener('focus', () => pull());
+
+function applyCache(c) {
+  docs = (c && c.docs) || {};
+  dirty.clear();
+  ((c && c.dirty) || []).forEach(d => dirty.add(d));
+}
+// instant start from this device's cache (works offline)
+try { uid = localStorage.getItem('tracker:lastUid') || null; } catch (e) {}
+applyCache(cacheLoad(cacheKey()));
+
+/* ---------- auth ---------- */
+function showAuth(mode, msg) {
+  const a = $('auth'); a.hidden = false; a.dataset.mode = mode;
+  $('authMsg').textContent = msg || '';
+  $('authSetup').hidden = mode !== 'setup';
+  $('authForm').hidden = mode === 'setup';
+  $('authSubmit').textContent = mode === 'signup' ? 'Create account' : 'Sign in';
+  $('authSwitch').textContent = mode === 'signup' ? 'Have an account? Sign in' : 'First time? Create account';
+}
+function hideAuth() { $('auth').hidden = true; }
+async function startSync(user) {
+  const prevUid = uid;
+  uid = user.id; userEmail = user.email || '';
+  try { localStorage.setItem('tracker:lastUid', uid); } catch (e) {}
+  if (prevUid !== uid) applyCache(cacheLoad(cacheKey()));
+  hideAuth();
+  $('acct').textContent = userEmail;
+  render();
+  await pull(true);
+}
+async function connect() {
+  if (!CFG.supabaseUrl || !CFG.supabaseKey || /YOUR/.test(CFG.supabaseUrl + CFG.supabaseKey) || !window.supabase) { showAuth('setup'); return; }
+  sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'tracker-auth' } });
+  setStatus('connecting');
+  const { data } = await sb.auth.getSession();
+  if (data && data.session) await startSync(data.session.user);
+  else { setStatus('local'); showAuth('signin'); }
+  sb.auth.onAuthStateChange((ev, session) => {
+    if (ev === 'SIGNED_OUT') { uid = null; userEmail = ''; try { localStorage.removeItem('tracker:lastUid'); } catch (e) {} applyCache(null); render(); showAuth('signin'); }
+  });
+}
+$('authSwitch').onclick = () => showAuth($('auth').dataset.mode === 'signup' ? 'signin' : 'signup');
+$('authForm').onsubmit = async e => {
+  e.preventDefault();
+  const email = $('authEmail').value.trim(), password = $('authPass').value, mode = $('auth').dataset.mode;
+  if (!email || password.length < 6) { $('authMsg').textContent = 'Enter your email and a password of 6+ characters.'; return; }
+  $('authSubmit').disabled = true; $('authMsg').textContent = '';
+  try {
+    const res = mode === 'signup' ? await sb.auth.signUp({ email, password }) : await sb.auth.signInWithPassword({ email, password });
+    if (res.error) throw res.error;
+    if (res.data.session) await startSync(res.data.session.user);
+    else showAuth('signin', 'Account created. Confirm the link in your email, then sign in here.');
+  } catch (err) {
+    $('authMsg').textContent = navigator.onLine ? (err.message || 'Could not sign in.') : 'You are offline.';
+  } finally { $('authSubmit').disabled = false; }
+};
+$('signOut').onclick = async () => {
+  if (!sb) return;
+  if (dirty.size) { await flush(); if (dirty.size && !confirm('Some changes have not synced yet and will stay on this device only. Sign out anyway?')) return; }
+  await sb.auth.signOut();
+};
+$('exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify({ app: 'tracker', v: 1, exported: new Date().toISOString(), docs }, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `tracker-backup-${todayK()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const j = JSON.parse(await f.text());
+    if (!j || !j.docs || typeof j.docs !== 'object') throw 0;
+    if (!confirm('Replace all current data with this backup?')) return;
+    docs = j.docs; Object.keys(docs).forEach(k => { docs[k].u = Date.now(); dirty.add(k); });
+    cacheSave(); scheduleFlush(50); render();
+  } catch (err) { alert('That file is not a tracker backup.'); }
+};
+
+/* ---------- habit stats ---------- */
+function curStreak(h) {
+  let k = todayK();
+  if (!done(h, k)) k = addD(k, -1);
+  let n = 0;
+  while (done(h, k) && n < 5000) { n++; k = addD(k, -1); }
+  return n;
+}
+function bestStreak(h) {
+  let k = h.created, end = todayK(), run = 0, best = 0, guard = 0;
+  while (k <= end && guard++ < 5000) { if (done(h, k)) { run++; if (run > best) best = run; } else run = 0; k = addD(k, 1); }
+  return best;
+}
+function rate(h, days, endK) {
+  const t = todayK();
+  endK = endK > t ? t : endK;
+  let start = addD(endK, -(days - 1));
+  if (h.created > start) start = h.created;
+  let d = 0, n = 0, k = start;
+  while (k <= endK) {
+    const isDone = done(h, k);
+    if (k === t && !isDone) break; // don't penalise today until it's over
+    n++; if (isDone) d++;
+    k = addD(k, 1);
+  }
+  return n ? d / n : null;
+}
+function dayCompletion(k) {
+  const act = cfg().habits.filter(h => h.created <= k);
+  if (!act.length) return null;
+  const set = checksOn(k);
+  return act.filter(h => set.includes(h.id)).length / act.length;
+}
+function rangeCompletion(days, endK) {
+  const t = todayK(); endK = endK > t ? t : endK;
+  let d = 0, n = 0;
+  for (let i = 0; i < days; i++) {
+    const k = addD(endK, -i);
+    const act = cfg().habits.filter(h => h.created <= k);
+    const set = checksOn(k);
+    const c = act.filter(h => set.includes(h.id)).length;
+    if (k === t) { d += c; n += c; continue; } // today counts only what's done
+    d += c; n += act.length;
+  }
+  return n ? d / n : null;
+}
+const pct = v => v == null ? '–' : Math.round(v * 100) + '%';
+
+/* ---------- actions ---------- */
+function toggle(hid, k) {
+  if (k > todayK()) return;
+  const h = cfg().habits.find(x => x.id === hid);
+  if (h && k < h.created) mutate('config', c => { const x = c.habits.find(y => y.id === hid); if (x) x.created = k; });
+  mutate(monthId(k), m => {
+    m.checks = m.checks || {};
+    const a = m.checks[k] || [];
+    const i = a.indexOf(hid);
+    i >= 0 ? a.splice(i, 1) : a.push(hid);
+    if (a.length) m.checks[k] = a; else delete m.checks[k];
+  });
+}
+function addFood(label, g) {
+  g = +g;
+  if (!(g > 0) || g > 1000) return false;
+  const k = S.sel, now = new Date();
+  mutate(monthId(k), m => {
+    m.food = m.food || {};
+    (m.food[k] = m.food[k] || []).push({ id: newId(), n: label || '', g: num(g), t: `${pad(now.getHours())}:${pad(now.getMinutes())}` });
+  });
+  return true;
+}
+// ex day doc shape: m.ex[date] = { typeId: count }
+function setEx(tid, k, count) {
+  if (k > todayK()) return;
+  count = Math.max(0, Math.min(9, count));
+  mutate(monthId(k), m => {
+    m.ex = m.ex || {};
+    const day = m.ex[k] || {};
+    if (count) day[tid] = count; else delete day[tid];
+    if (Object.keys(day).length) m.ex[k] = day; else delete m.ex[k];
+  });
+}
+function setGoal(g) {
+  g = Math.round(+g);
+  if (!(g > 0) || g > 1000) return;
+  const t = todayK();
+  mutate('config', c => {
+    if (!c.goals.length) { c.goals.push({ from: '0000-01-01', g }); return; }
+    const last = c.goals[c.goals.length - 1];
+    if (last.from === t) last.g = g; else c.goals.push({ from: t, g });
+  });
+}
+
+/* ---------- chart ---------- */
+function barChart(el, { data, max, ticks, goal, colorFor, tip, label, isSel = d => d.k === S.sel, labelEvery = 7, fmtX = fmtShort }) {
+  const W = Math.max(280, el.clientWidth - 16), H = 140, pl = 34, pb = 18, pt = 6;
+  const n = data.length, cw = (W - pl) / n, bw = Math.max(2, cw - 2), r = Math.min(4, bw / 2);
+  const y = v => pt + (H - pt - pb) * (1 - Math.min(v, max) / max);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">`;
+  for (const t of ticks) {
+    s += `<line x1="${pl}" x2="${W}" y1="${y(t.v)}" y2="${y(t.v)}" stroke="var(--line)" stroke-width="1"/>`;
+    s += `<text x="${pl - 6}" y="${y(t.v) + 3.5}" text-anchor="end" font-size="10" fill="var(--muted)">${t.l}</text>`;
+  }
+  data.forEach((d, i) => {
+    const x = pl + i * cw + 1;
+    if (d.v != null && d.v > 0) {
+      const top = y(d.v), base = y(0), h = base - top;
+      const rr = Math.min(r, h);
+      s += `<path d="M${x},${base}V${top + rr}Q${x},${top} ${x + rr},${top}H${x + bw - rr}Q${x + bw},${top} ${x + bw},${top + rr}V${base}Z" fill="${colorFor(d)}"/>`;
+    }
+    if (isSel(d)) s += `<circle cx="${x + bw / 2}" cy="${H - pb + 6}" r="2" fill="var(--ink)"/>`;
+    else if ((n - 1 - i) % labelEvery === 0) s += `<text x="${x + bw / 2}" y="${H - 3}" text-anchor="middle" font-size="10" fill="var(--muted)">${fmtX(d.k)}</text>`;
+  });
+  if (goal) s += `<line x1="${pl}" x2="${W}" y1="${y(goal)}" y2="${y(goal)}" stroke="var(--ink2)" stroke-width="1.25" stroke-dasharray="4 3"/>`;
+  data.forEach((d, i) => {
+    s += `<rect x="${pl + i * cw}" y="0" width="${cw}" height="${H}" fill="transparent" data-tip="${esc(tip(d))}" data-k="${d.k}" style="cursor:pointer"/>`;
+  });
+  el.innerHTML = s + '</svg>';
+}
+
+/* ---------- render ---------- */
+const CHECK = '<svg width="14" height="14" viewBox="0 0 14 14"><path d="m3 7.2 2.6 2.6L11 4.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const typingIn = el => el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
+
+function render() {
+  const t = todayK();
+  if (S.sel > t) S.sel = t;
+  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === S.tab));
+  TABS.forEach(x => $('v-' + x).hidden = S.tab !== x);
+  renderHello();
+  $('datelabel').textContent = S.sel === t ? 'Today' : S.sel === addD(t, -1) ? 'Yesterday' : fmtD(S.sel);
+  $('next').disabled = S.sel >= t;
+  $('today').hidden = S.sel === t;
+  ({ habits: renderHabits, food: renderFood, exercise: renderEx })[S.tab]();
+}
+
+function renderHello() {
+  const now = new Date(), h = now.getHours(), t = todayK();
+  const greet = h < 5 ? 'Up late' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  $('hello').textContent = `${greet}, Charlie`;
+  const c = cfg(), parts = [];
+  const hs = c.habits.filter(x => x.created <= t), set = checksOn(t);
+  if (hs.length) {
+    const d = hs.filter(x => set.includes(x.id)).length;
+    parts.push(d === hs.length ? `<span class="ok">${d === 1 ? 'Habit done' : `All ${d} habits done`}</span>` : `<b>${d}/${hs.length}</b> habits`);
+  }
+  const g = goalOn(t);
+  if (g) {
+    const tot = totalOn(t);
+    parts.push(tot >= g ? `<span class="ok">Protein goal hit</span> (${num(tot)} g)` : `<b>${num(g - tot)} g</b> protein to go`);
+  }
+  const ws = weekScore(weekStart(t));
+  if (ws) {
+    const daysLeft = 7 - ((now.getDay() + 6) % 7) - 1;
+    const left = ws.need - ws.got;
+    parts.push(left <= 0 ? `<span class="ok">Training week complete</span>` : `<b>${left}</b> session${left > 1 ? 's' : ''} left this week${daysLeft ? ` · ${daysLeft} day${daysLeft > 1 ? 's' : ''} to go` : ' · last day'}`);
+  }
+  $('summary').innerHTML = parts.length ? parts.join(' &nbsp;·&nbsp; ') : `${now.toLocaleDateString('en-IE', { weekday: 'long', day: 'numeric', month: 'long' })}. Add a habit, a protein goal or your weekly sessions to get started.`;
+}
+
+function renderEx() {
+  const t = todayK(), k = S.sel, ws = weekStart(k), types = exTypes();
+  const thisWeek = ws === weekStart(t);
+  $('eTitle').textContent = thisWeek ? 'This week' : `Week of ${fmtShort(ws)}`;
+  $('eEdit').hidden = !types.length;
+  $('eEdit').textContent = S.editE ? 'Done' : 'Edit';
+  // stats
+  const sc = weekScore(ws);
+  let avg = null, n = 0, sum = 0;
+  for (let i = 0; i < 12; i++) { const w = addD(weekStart(t), -7 * i); if (w === weekStart(t)) continue; const s = weekScore(w); if (s) { sum += s.pct; n++; } }
+  if (n) avg = sum / n;
+  const strk = weekStreak();
+  $('eStats').innerHTML = `
+    <div class="stat"><span>${thisWeek ? 'This week' : 'That week'}</span><b>${sc ? sc.got : 0}<span style="font-size:14px;color:var(--muted);text-transform:none;letter-spacing:0"> / ${sc ? sc.need : 0}</span></b><small>sessions</small></div>
+    <div class="stat"><span>Targets met</span><b>${sc ? sc.typesDone + '/' + sc.types : '–'}</b><small>session types</small></div>
+    <div class="stat"><span>Week streak</span><b>${strk}</b><small>full weeks in a row</small></div>
+    <div class="stat"><span>12-wk avg</span><b>${pct(avg)}</b><small>completed weeks</small></div>`;
+  // list
+  const list = $('eList');
+  if (!typingIn(list)) {
+    if (!types.length) list.innerHTML = '<div class="empty">No session types yet. Add them below with a weekly target, e.g. Gym × 3.</div>';
+    else if (S.editE) {
+      list.innerHTML = types.map((x, i) => `<div class="erow" data-id="${x.id}">
+        <button class="iconbtn" data-act="up" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+        <button class="iconbtn" data-act="down" ${i === types.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
+        <input class="inp" data-act="rename" value="${esc(x.name)}" maxlength="30">
+        <input class="inp tgt" data-act="target" type="number" min="1" max="21" value="${x.target}" aria-label="Sessions per week">
+        <span style="font-size:12px;color:var(--muted)">/wk</span>
+        <button class="del ${S.armed === x.id ? 'arm' : ''}" data-act="del">${S.armed === x.id ? 'Confirm' : 'Delete'}</button></div>`).join('');
+    } else {
+      const days = []; for (let i = 0; i < 7; i++) days.push(addD(ws, i));
+      const head = `<div class="ehead"><span></span><div class="wk">${days.map(d => `<span class="dl ${d === k ? 'sel' : ''}">${'SMTWTFS'[parse(d).getDay()]}</span>`).join('')}</div><span></span></div>`;
+      list.innerHTML = head + types.map(x => {
+        const c = exCount(x.id, ws), done = c >= x.target, p = Math.min(100, c / x.target * 100);
+        return `<div class="erow2" data-id="${x.id}">
+          <div style="min-width:0"><div class="hname">${esc(x.name)}</div>
+            <div class="eprog"><div class="bar"><i style="width:${p}%"></i></div><span class="${done ? 'ok' : ''}">${c} / ${x.target}${done ? ' ✓' : ''}</span></div></div>
+          <div class="wk">${days.map(d => {
+            const v = exOn(d)[x.id] || 0;
+            return `<button class="wcell ${v ? 'on' : ''} ${d === k ? 'sel' : ''}" data-act="cell" data-k="${d}" ${d > t ? 'disabled' : ''} data-tip="${fmtD(d)} · ${v} session${v === 1 ? '' : 's'}${d <= t ? ' · click to change' : ''}">${v > 1 ? v : ''}</button>`;
+          }).join('')}</div>
+          <button class="plus" data-act="plus" aria-label="Log ${esc(x.name)} on ${fmtD(k)}" data-tip="Log on ${fmtD(k)}">+</button></div>`;
+      }).join('');
+    }
+  }
+  // chart
+  $('eChartCard').hidden = !types.length;
+  if (types.length) {
+    const data = [];
+    for (let i = 11; i >= 0; i--) { const w = addD(ws, -7 * i); const s = w > t ? null : weekScore(w); data.push({ k: w, v: s ? s.pct : null, s }); }
+    barChart($('eChart'), {
+      data, max: 1, ticks: [{ v: 0, l: '0' }, { v: .5, l: '50%' }, { v: 1, l: '100%' }],
+      colorFor: d => d.v >= 1 ? 'var(--accent)' : 'var(--accent-dim)',
+      tip: d => `w/c ${fmtShort(d.k)} · ${d.s ? `${d.s.got}/${d.s.need} sessions` : 'no targets'}`,
+      label: 'Weekly exercise target completion, last 12 weeks',
+      isSel: d => d.k === ws, labelEvery: 4
+    });
+  }
+}
+
+function renderHabits() {
+  const c = cfg(), hs = c.habits, k = S.sel, t = todayK();
+  const isToday = k === t;
+  // stats
+  const set = checksOn(k);
+  const act = hs.filter(h => h.created <= k || set.includes(h.id));
+  const doneN = act.filter(h => set.includes(h.id)).length;
+  let best = null;
+  hs.forEach(h => { const s = curStreak(h); if (!best || s > best.s) best = { s, n: h.name }; });
+  $('hStats').innerHTML = `
+    <div class="stat"><span>${isToday ? 'Today' : fmtShort(k)}</span><b>${doneN}<span style="font-size:14px;color:var(--muted);text-transform:none;letter-spacing:0"> / ${act.length}</span></b></div>
+    <div class="stat"><span>7 days</span><b>${pct(rangeCompletion(7, k))}</b></div>
+    <div class="stat"><span>30 days</span><b>${pct(rangeCompletion(30, k))}</b></div>
+    <div class="stat"><span>Top streak</span><b>${best && best.s ? best.s + 'd' : '–'}</b>${best && best.s ? `<small>${esc(best.n)}</small>` : ''}</div>`;
+
+  // list
+  const list = $('hList');
+  $('hEdit').textContent = S.editH ? 'Done' : 'Edit';
+  $('hEdit').hidden = !hs.length;
+  $('hListTitle').textContent = isToday ? 'Habits' : 'Habits · ' + fmtD(k);
+  if (!typingIn(list)) {
+    if (!hs.length) list.innerHTML = '<div class="empty">No habits yet. Add one above.</div>';
+    else if (S.editH) {
+      list.innerHTML = hs.map((h, i) => `<div class="erow" data-id="${h.id}">
+        <button class="iconbtn" data-act="up" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+        <button class="iconbtn" data-act="down" ${i === hs.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
+        <input class="inp" data-act="rename" value="${esc(h.name)}" maxlength="60">
+        <button class="del ${S.armed === h.id ? 'arm' : ''}" data-act="del">${S.armed === h.id ? 'Confirm' : 'Delete'}</button></div>`).join('');
+    } else {
+      const narrow = window.innerWidth < 560, N = narrow ? 7 : 14;
+      const days = []; for (let i = N - 1; i >= 0; i--) days.push(addD(k, -i));
+      const head = `<div class="hhead"><span></span><span></span><div class="strip">${days.map(d => `<span class="dl ${d === k ? 'sel' : ''}">${'SMTWTFS'[parse(d).getDay()]}</span>`).join('')}</div></div>`;
+      list.innerHTML = head + hs.map(h => {
+        const on = set.includes(h.id), cs = curStreak(h), bs = bestStreak(h), r = rate(h, 30, t);
+        return `<div class="hrow" data-id="${h.id}">
+          <button class="chk" role="checkbox" aria-checked="${on}" aria-label="${esc(h.name)}" data-act="tick">${CHECK}</button>
+          <div style="min-width:0"><div class="hname">${esc(h.name)}</div>
+            <div class="hmeta"><b>${cs}d</b> streak · best ${bs}d · 30d ${pct(r)}</div></div>
+          <div class="strip">${days.map(d => {
+            const dn = done(h, d), cls = ['cell', dn && 'on', d < h.created && !dn && 'pre', d === k && 'sel', d > t && 'fut'].filter(Boolean).join(' ');
+            return `<button class="${cls}" data-act="cell" data-k="${d}" data-tip="${fmtD(d)} · ${dn ? 'done' : 'not done'}"></button>`;
+          }).join('')}</div></div>`;
+      }).join('');
+    }
+  }
+  // chart
+  $('hChartCard').hidden = !hs.length;
+  if (hs.length) {
+    const data = []; for (let i = 29; i >= 0; i--) { const d = addD(k, -i); data.push({ k: d, v: d > t ? null : dayCompletion(d) }); }
+    barChart($('hChart'), {
+      data, max: 1, ticks: [{ v: 0, l: '0' }, { v: .5, l: '50%' }, { v: 1, l: '100%' }],
+      colorFor: () => 'var(--accent)',
+      tip: d => `${fmtD(d.k)} · ${d.v == null ? 'no habits' : pct(d.v)}`,
+      label: 'Daily habit completion, last 30 days'
+    });
+  }
+}
+
+function renderFood() {
+  const c = cfg(), k = S.sel, t = todayK(), goal = goalOn(k), total = totalOn(k);
+  // progress
+  const box = $('pBox');
+  if (!typingIn(box)) {
+    if (!goal || S.editGoal) {
+      box.innerHTML = `<div style="font-weight:600;margin-bottom:6px">${goal ? 'Daily protein goal' : 'Set your daily protein goal'}</div>
+        <form class="goalset" id="goalForm"><input class="inp" id="goalIn" type="number" inputmode="numeric" min="1" max="1000" value="${goal || ''}" placeholder="150"> <span style="color:var(--muted)">g / day</span>
+        <button class="btn" type="submit" style="height:32px">Save</button>${goal ? '<button class="btn ghost" type="button" id="goalCancel" style="height:32px">Cancel</button>' : ''}</form>`;
+      setTimeout(() => { const g = $('goalIn'); if (g && S.editGoal) g.focus(); }, 0);
+    } else {
+      const left = goal - total, p = Math.min(100, total / goal * 100);
+      box.innerHTML = `<div class="ptop"><span class="pbig">${num(total)}</span><span class="pgoal">/ <button id="goalBtn" title="Change goal">${goal} g</button></span>
+        <span class="pleft ${left <= 0 ? 'hit' : ''}">${left <= 0 ? `Goal hit${left < 0 ? ' · +' + num(-left) + ' g' : ''}` : num(left) + ' g to go'}</span></div>
+        <div class="bar"><i style="width:${p}%"></i></div>`;
+    }
+  }
+  // chips
+  const pres = c.presets;
+  const seen = new Set(pres.map(p => p.name.toLowerCase()));
+  const freq = new Map();
+  for (let i = 0; i < 30; i++) for (const e of foodOn(addD(t, -i))) {
+    const n = (e.n || '').trim(); if (!n || seen.has(n.toLowerCase())) continue;
+    const f = freq.get(n.toLowerCase()) || { n, g: e.g, c: 0 }; f.c++; freq.set(n.toLowerCase(), f);
+  }
+  const recent = [...freq.values()].sort((a, b) => b.c - a.c).slice(0, 6);
+  $('pEdit').hidden = !pres.length;
+  $('pEdit').textContent = S.editP ? 'Done' : 'Edit';
+  $('chipCard').hidden = !pres.length && !recent.length;
+  $('chips').innerHTML = pres.map(p => `<button class="chip" data-act="${S.editP ? 'rmp' : 'preset'}" data-id="${p.id}">${esc(p.name)} <em>${p.g} g</em>${S.editP ? '<span class="x">×</span>' : ''}</button>`).join('')
+    + (S.editP ? '' : recent.map(r => `<button class="chip recent" data-act="recent" data-n="${esc(r.n)}" data-g="${r.g}" title="Recent · tap to add">${esc(r.n)} <em>${r.g} g</em></button>`).join(''));
+  // log
+  const entries = foodOn(k);
+  $('logTitle').textContent = k === t ? 'Today' : fmtD(k);
+  $('logCount').textContent = entries.length ? `${entries.length} item${entries.length > 1 ? 's' : ''}` : '';
+  $('log').innerHTML = entries.length ? entries.slice().sort((a, b) => (a.t || '').localeCompare(b.t || '')).map(e => `<div class="lrow">
+      <span class="t">${esc(e.t || '')}</span><span>${e.n ? esc(e.n) : '<span style="color:var(--muted)">Protein</span>'}</span>
+      <span class="g">${e.g} g</span><button class="rm" data-act="rme" data-id="${e.id}" aria-label="Remove">×</button></div>`).join('')
+    : '<div class="empty">Nothing logged.</div>';
+  // stats
+  const window_ = (days) => { let sum = 0, n = 0, hit = 0; for (let i = 0; i < days; i++) { const d = addD(k, -i); if (d > t) continue; const tt = totalOn(d); if (foodOn(d).length) { sum += tt; n++; const g = goalOn(d); if (g && tt >= g) hit++; } } return { avg: n ? sum / n : null, n, hit }; };
+  const w7 = window_(7), w30 = window_(30);
+  let hs = 0, d = t; const gt = goalOn(t);
+  if (!(gt && totalOn(t) >= gt)) d = addD(t, -1);
+  while (hs < 5000) { const g = goalOn(d); if (g && totalOn(d) >= g) { hs++; d = addD(d, -1); } else break; }
+  $('fStats').innerHTML = `
+    <div class="stat"><span>7-day avg</span><b>${w7.avg == null ? '–' : Math.round(w7.avg) + ' g'}</b><small>${w7.n} logged day${w7.n === 1 ? '' : 's'}</small></div>
+    <div class="stat"><span>30-day avg</span><b>${w30.avg == null ? '–' : Math.round(w30.avg) + ' g'}</b><small>${w30.n} logged day${w30.n === 1 ? '' : 's'}</small></div>
+    <div class="stat"><span>Goal streak</span><b>${hs}d</b></div>
+    <div class="stat"><span>Hit rate 30d</span><b>${w30.n ? Math.round(w30.hit / w30.n * 100) + '%' : '–'}</b><small>${w30.hit} of ${w30.n} days</small></div>`;
+  // chart
+  const data = []; let mx = 0;
+  for (let i = 29; i >= 0; i--) { const dd = addD(k, -i); const v = dd > t ? null : totalOn(dd); data.push({ k: dd, v, g: goalOn(dd) }); if (v > mx) mx = v; }
+  const g0 = goalOn(k) || 0;
+  const max = Math.max(10, Math.ceil(Math.max(mx, g0) * 1.1 / 10) * 10);
+  barChart($('fChart'), {
+    data, max, goal: g0 || null,
+    ticks: [{ v: 0, l: '0' }, { v: max, l: max + 'g' }].concat(g0 && g0 < max * .88 && g0 > max * .12 ? [{ v: g0, l: g0 + '' }] : []),
+    colorFor: dd => dd.g && dd.v >= dd.g ? 'var(--accent)' : 'var(--accent-dim)',
+    tip: dd => `${fmtD(dd.k)} · ${num(dd.v || 0)} g${dd.g ? ' / ' + dd.g : ''}`,
+    label: 'Daily protein, last 30 days'
+  });
+}
+
+/* ---------- events ---------- */
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; try { history.replaceState(null, '', '#' + S.tab); } catch (e) { location.hash = S.tab; } render(); });
+$('prev').onclick = () => { S.sel = addD(S.sel, -1); render(); };
+$('next').onclick = () => { if (S.sel < todayK()) { S.sel = addD(S.sel, 1); render(); } };
+$('today').onclick = () => { S.sel = todayK(); render(); };
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'ArrowLeft') $('prev').click();
+  else if (e.key === 'ArrowRight') $('next').click();
+  else if (e.key === 't') $('today').click();
+});
+
+$('habitForm').onsubmit = e => {
+  e.preventDefault();
+  const n = $('habitName').value.trim(); if (!n) return;
+  mutate('config', c => c.habits.push({ id: newId(), name: n, created: todayK() }));
+  $('habitName').value = '';
+};
+$('hEdit').onclick = () => { S.editH = !S.editH; S.armed = null; render(); };
+$('hList').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const row = b.closest('[data-id]'); const id = row && row.dataset.id;
+  const a = b.dataset.act;
+  if (a === 'tick') toggle(id, S.sel);
+  else if (a === 'cell') toggle(id, b.dataset.k);
+  else if (a === 'up' || a === 'down') mutate('config', c => { const i = c.habits.findIndex(h => h.id === id), j = a === 'up' ? i - 1 : i + 1; if (j < 0 || j >= c.habits.length) return; [c.habits[i], c.habits[j]] = [c.habits[j], c.habits[i]]; });
+  else if (a === 'del') {
+    if (S.armed === id) { S.armed = null; mutate('config', c => { c.habits = c.habits.filter(h => h.id !== id); }); }
+    else { S.armed = id; render(); setTimeout(() => { if (S.armed === id) { S.armed = null; render(); } }, 3000); }
+  }
+});
+const commitRename = inp => {
+  const id = inp.closest('[data-id]').dataset.id, v = inp.value.trim();
+  const h = cfg().habits.find(x => x.id === id);
+  if (h && v && v !== h.name) mutate('config', c => { const x = c.habits.find(y => y.id === id); if (x) x.name = v; });
+};
+$('hList').addEventListener('focusout', e => { if (e.target.dataset.act === 'rename') setTimeout(() => commitRename(e.target), 0); });
+$('hList').addEventListener('keydown', e => { if (e.target.dataset.act === 'rename' && e.key === 'Enter') e.target.blur(); });
+
+$('foodForm').onsubmit = e => {
+  e.preventDefault();
+  const l = $('fLabel').value.trim(), g = $('fGrams').value;
+  if (!addFood(l, g)) { $('fGrams').focus(); return; }
+  if (S.saveP && l && !cfg().presets.some(p => p.name.toLowerCase() === l.toLowerCase()))
+    mutate('config', c => c.presets.push({ id: newId(), name: l, g: num(+g) }));
+  $('fLabel').value = ''; $('fGrams').value = '';
+  S.saveP = false; $('fSave').setAttribute('aria-pressed', 'false');
+  $('fLabel').focus();
+};
+$('fSave').onclick = () => { S.saveP = !S.saveP; $('fSave').setAttribute('aria-pressed', S.saveP); };
+$('pEdit').onclick = () => { S.editP = !S.editP; render(); };
+$('chips').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  if (b.dataset.act === 'preset') { const p = cfg().presets.find(x => x.id === b.dataset.id); if (p) addFood(p.name, p.g); }
+  else if (b.dataset.act === 'recent') addFood(b.dataset.n, b.dataset.g);
+  else if (b.dataset.act === 'rmp') mutate('config', c => { c.presets = c.presets.filter(p => p.id !== b.dataset.id); if (!c.presets.length) S.editP = false; });
+});
+$('log').addEventListener('click', e => {
+  const b = e.target.closest('[data-act=rme]'); if (!b) return;
+  const k = S.sel;
+  mutate(monthId(k), m => { if (m.food && m.food[k]) { m.food[k] = m.food[k].filter(x => x.id !== b.dataset.id); if (!m.food[k].length) delete m.food[k]; } });
+});
+$('pBox').addEventListener('click', e => {
+  if (e.target.id === 'goalBtn') { S.editGoal = true; render(); }
+  else if (e.target.id === 'goalCancel') { S.editGoal = false; render(); }
+});
+$('pBox').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = $('goalIn').value;
+  if (+v > 0) { S.editGoal = false; document.activeElement.blur(); setGoal(v); }
+});
+
+// exercise
+$('exForm').onsubmit = e => {
+  e.preventDefault();
+  const n = $('exName').value.trim(), tg = Math.round(+$('exTarget').value || 1);
+  if (!n) { $('exName').focus(); return; }
+  mutate('config', c => { c.ex = c.ex || []; c.ex.push({ id: newId(), name: n, target: Math.max(1, Math.min(21, tg)), created: weekStart(todayK()) }); });
+  $('exName').value = ''; $('exTarget').value = ''; $('exName').focus();
+};
+$('eEdit').onclick = () => { S.editE = !S.editE; S.armed = null; render(); };
+function exBump(id, k, next) {
+  const x = exTypes().find(y => y.id === id); if (!x) return;
+  if (k < x.created) mutate('config', c => { const y = c.ex.find(z => z.id === id); if (y) y.created = weekStart(k); });
+  setEx(id, k, next);
+}
+$('eList').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
+  const row = b.closest('[data-id]'); const id = row && row.dataset.id, a = b.dataset.act;
+  if (a === 'cell') { const v = exOn(b.dataset.k)[id] || 0; exBump(id, b.dataset.k, v >= 2 ? 0 : v + 1); }
+  else if (a === 'plus') exBump(id, S.sel, (exOn(S.sel)[id] || 0) + 1);
+  else if (a === 'up' || a === 'down') mutate('config', c => { const i = c.ex.findIndex(x => x.id === id), j = a === 'up' ? i - 1 : i + 1; if (j < 0 || j >= c.ex.length) return; [c.ex[i], c.ex[j]] = [c.ex[j], c.ex[i]]; });
+  else if (a === 'del') {
+    if (S.armed === id) { S.armed = null; mutate('config', c => { c.ex = c.ex.filter(x => x.id !== id); if (!c.ex.length) S.editE = false; }); }
+    else { S.armed = id; render(); setTimeout(() => { if (S.armed === id) { S.armed = null; render(); } }, 3000); }
+  }
+});
+$('eList').addEventListener('focusout', e => {
+  const inp = e.target, a = inp.dataset.act; if (a !== 'rename' && a !== 'target') return;
+  setTimeout(() => {
+    const id = inp.closest('[data-id]').dataset.id, x = exTypes().find(y => y.id === id); if (!x) return;
+    if (a === 'rename') { const v = inp.value.trim(); if (v && v !== x.name) mutate('config', c => { c.ex.find(y => y.id === id).name = v; }); }
+    else { const v = Math.round(+inp.value); if (v >= 1 && v <= 21 && v !== x.target) mutate('config', c => { c.ex.find(y => y.id === id).target = v; }); }
+  }, 0);
+});
+$('eList').addEventListener('keydown', e => { if (e.target.tagName === 'INPUT' && e.key === 'Enter') e.target.blur(); });
+
+// chart: click bar -> jump to day
+['hChart', 'fChart', 'eChart'].forEach(id => $(id).addEventListener('click', e => {
+  const r = e.target.closest('[data-k]'); if (!r || r.dataset.k > todayK()) return;
+  S.sel = r.dataset.k; render();
+}));
+
+// tooltip
+const tip = $('tip');
+document.addEventListener('pointermove', e => {
+  const el = e.target.closest && e.target.closest('[data-tip]');
+  if (!el) { tip.style.opacity = 0; return; }
+  const r = el.getBoundingClientRect();
+  tip.textContent = el.dataset.tip;
+  tip.style.left = Math.min(window.innerWidth - 60, Math.max(60, r.left + r.width / 2)) + 'px';
+  tip.style.top = (el.tagName === 'rect' ? e.clientY : r.top) + 'px';
+  tip.style.opacity = 1;
+});
+document.addEventListener('pointerleave', () => tip.style.opacity = 0);
+document.addEventListener('scroll', () => tip.style.opacity = 0, true);
+
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(render, 120); });
+setInterval(() => { const t = todayK(); if (t !== lastToday) { if (S.sel === lastToday) S.sel = t; lastToday = t; render(); } }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { const t = todayK(); if (t !== lastToday) { if (S.sel === lastToday) S.sel = t; lastToday = t; } render(); } });
+
+render();
+connect();
+if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
