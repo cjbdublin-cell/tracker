@@ -1,5 +1,5 @@
 // Offline app shell. Bump VERSION when you change any file so phones pick up the update.
-const VERSION = 'tracker-v1';
+const VERSION = 'tracker-v2';
 const SHELL = [
   './', './index.html', './config.js', './supabase.js', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'

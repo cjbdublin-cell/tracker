@@ -1,6 +1,6 @@
-// Paste your Supabase project values here (Project Settings → API / API Keys).
-// The publishable (anon) key is safe to be public: row-level security keeps your data private.
+// Supabase project values (Project Settings → API Keys).
+// The publishable key is safe to be public: row-level security keeps your data private.
 window.TRACKER_CONFIG = {
-  supabaseUrl: 'https://YOUR-PROJECT.supabase.co',
-  supabaseKey: 'YOUR-PUBLISHABLE-KEY'
+  supabaseUrl: 'https://okjkyaxjosgoawybbdot.supabase.co',
+  supabaseKey: 'sb_publishable_3nMq5dZfZkiyoYN6QMDV9w_nREYagwn'
 };
