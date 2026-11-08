@@ -174,6 +174,23 @@ form.add{display:flex;gap:6px;margin-bottom:14px}
 footer{display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:center;font-size:12px;color:var(--muted);padding:8px 0 20px}
 footer .link{color:var(--muted)}
 
+/* home */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.tile{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);text-align:left;min-width:0}
+.tile:hover{border-color:var(--muted)}
+.tile b{font-size:19px;font-weight:700;letter-spacing:-.02em;line-height:1.1;white-space:nowrap}
+.tile b small{font-size:13px;color:var(--muted);font-weight:500;letter-spacing:0}
+.tile span{font-size:12px;color:var(--ink2);line-height:1.25}
+.tile em{font-style:normal;font-size:11px;color:var(--muted)}
+.trow{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:9px 12px;border-top:1px solid var(--line2)}
+.trow:first-child{border-top:0}
+.trow .sub{font-size:12px;color:var(--muted)}
+.trow .chips{padding:0;justify-content:flex-end}
+.trow.pro .chips{grid-column:2/-1;justify-content:flex-start;padding-bottom:2px}
+.tico{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700}
+.alldone{padding:16px 12px;color:var(--ok);font-weight:600}
+.datenav[hidden] + .sync{margin-left:auto}
+
 #tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:4px 7px;border-radius:5px;white-space:nowrap;z-index:10;opacity:0;transform:translate(-50%,-100%);margin-top:-8px}
 [hidden]{display:none!important}
 
@@ -193,11 +210,12 @@ footer .link{color:var(--muted)}
   <div class="hello"><h1 id="hello"></h1><p id="summary"></p></div>
   <header>
     <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="home">Home</button>
       <button class="tab" role="tab" data-tab="habits">Habits</button>
       <button class="tab" role="tab" data-tab="food">Food</button>
       <button class="tab" role="tab" data-tab="exercise">Exercise</button>
     </div>
-    <div class="datenav">
+    <div class="datenav" id="datenav">
       <button class="iconbtn" id="prev" aria-label="Previous day"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M9 2 4 7l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <div class="datelabel" id="datelabel"></div>
       <button class="iconbtn" id="next" aria-label="Next day"><svg width="14" height="14" viewBox="0 0 14 14"><path d="m5 2 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -205,6 +223,15 @@ footer .link{color:var(--muted)}
     </div>
     <div class="sync" id="sync" data-s="local"><i></i><span>Loading</span></div>
   </header>
+
+  <!-- HOME -->
+  <section id="v-home" hidden>
+    <div class="tiles" id="tiles"></div>
+    <div class="card">
+      <div class="cardhead"><span>Still to do</span><span id="todoMeta"></span></div>
+      <div id="todo"></div>
+    </div>
+  </section>
 
   <!-- HABITS -->
   <section id="v-habits" hidden>
@@ -300,8 +327,8 @@ const $ = id => document.getElementById(id);
 
 /* ---------- state ---------- */
 let docs = {};
-const TABS = ['habits', 'food', 'exercise'];
-const S = { tab: TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'habits', sel: todayK(), editH: false, editP: false, editE: false, saveP: false, editGoal: false, armed: null };
+const TABS = ['home', 'habits', 'food', 'exercise'];
+const S = { tab: TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home', sel: todayK(), editH: false, editP: false, editE: false, saveP: false, editGoal: false, armed: null };
 let lastToday = todayK();
 
 const blankCfg = () => ({ habits: [], goals: [], presets: [], ex: [] });
@@ -557,10 +584,10 @@ function toggle(hid, k) {
     if (a.length) m.checks[k] = a; else delete m.checks[k];
   });
 }
-function addFood(label, g) {
+function addFood(label, g, k = S.sel) {
   g = +g;
   if (!(g > 0) || g > 1000) return false;
-  const k = S.sel, now = new Date();
+  const now = new Date();
   mutate(monthId(k), m => {
     m.food = m.food || {};
     (m.food[k] = m.food[k] || []).push({ id: newId(), n: label || '', g: num(g), t: `${pad(now.getHours())}:${pad(now.getMinutes())}` });
@@ -625,35 +652,70 @@ function render() {
   if (S.sel > t) S.sel = t;
   document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === S.tab));
   TABS.forEach(x => $('v-' + x).hidden = S.tab !== x);
-  renderHello();
+  const home = S.tab === 'home';
+  document.querySelector('.hello').hidden = !home;
+  $('datenav').hidden = home;
+  if (home) renderHello();
   $('datelabel').textContent = S.sel === t ? 'Today' : S.sel === addD(t, -1) ? 'Yesterday' : fmtD(S.sel);
   $('next').disabled = S.sel >= t;
   $('today').hidden = S.sel === t;
-  ({ habits: renderHabits, food: renderFood, exercise: renderEx })[S.tab]();
+  ({ home: renderHome, habits: renderHabits, food: renderFood, exercise: renderEx })[S.tab]();
 }
 
 function renderHello() {
   const now = new Date(), h = now.getHours(), t = todayK();
   const greet = h < 5 ? 'Up late' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   $('hello').textContent = `${greet}, Charlie`;
-  const c = cfg(), parts = [];
+  $('summary').textContent = now.toLocaleDateString('en-IE', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+function ringSvg(p, done) {
+  const r = 22, C = 2 * Math.PI * r, v = Math.max(0, Math.min(1, p || 0));
+  return `<svg width="52" height="52" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="${r}" fill="none" stroke="var(--line)" stroke-width="7"/>`
+    + (v > 0 ? `<circle cx="28" cy="28" r="${r}" fill="none" stroke="${done ? 'var(--ok)' : 'var(--accent)'}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(C * v).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 28 28)"/>` : '')
+    + (done ? '<path d="m20.5 28.5 5 5 9.5-10" fill="none" stroke="var(--ok)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' : '')
+    + '</svg>';
+}
+
+function renderHome() {
+  const t = todayK(), c = cfg(), now = new Date();
+  // habits
   const hs = c.habits.filter(x => x.created <= t), set = checksOn(t);
-  if (hs.length) {
-    const d = hs.filter(x => set.includes(x.id)).length;
-    parts.push(d === hs.length ? `<span class="ok">${d === 1 ? 'Habit done' : `All ${d} habits done`}</span>` : `<b>${d}/${hs.length}</b> habits`);
+  const hDone = hs.filter(x => set.includes(x.id)).length;
+  // protein
+  const goal = goalOn(t), tot = totalOn(t);
+  // training
+  const ws = weekStart(t), sc = weekScore(ws);
+  const daysLeft = 6 - ((now.getDay() + 6) % 7);
+  const tile = (go, p, done, big, label, sub) => `<button class="tile" data-go="${go}">${ringSvg(p, done)}<div><b>${big}</b><br><span>${label}</span>${sub ? `<br><em>${sub}</em>` : ''}</div></button>`;
+  $('tiles').innerHTML =
+    (hs.length ? tile('habits', hDone / hs.length, hDone === hs.length, `${hDone}<small>/${hs.length}</small>`, 'Habits today') : tile('habits', 0, false, '–', 'Add habits'))
+    + (goal ? tile('food', tot / goal, tot >= goal, `${num(tot)}<small>/${goal}g</small>`, 'Protein', tot >= goal ? 'Goal hit' : `${num(goal - tot)} g to go`) : tile('food', 0, false, '–', 'Set protein goal'))
+    + (sc ? tile('exercise', sc.pct, sc.pct >= 1, `${sc.got}<small>/${sc.need}</small>`, 'Sessions this week', sc.pct >= 1 ? 'Week complete' : daysLeft ? `${daysLeft} day${daysLeft > 1 ? 's' : ''} left` : 'Last day') : tile('exercise', 0, false, '–', 'Add sessions'));
+
+  // to-do list
+  const rows = [];
+  hs.filter(x => !set.includes(x.id)).forEach(x => rows.push(`<div class="trow" data-id="${x.id}">
+    <button class="chk" role="checkbox" aria-checked="false" aria-label="${esc(x.name)}" data-act="htick">${CHECK}</button>
+    <div style="min-width:0"><div class="hname">${esc(x.name)}</div>${curStreak(x) ? `<div class="sub">${curStreak(x)}d streak – keep it going</div>` : ''}</div><span></span></div>`));
+  if (goal && tot < goal) {
+    const quick = c.presets.slice(0, 3);
+    rows.push(`<div class="trow pro"><span class="tico">g</span>
+      <div style="min-width:0"><div class="hname">Protein</div><div class="sub">${num(goal - tot)} g to go</div></div><span></span>
+      <div class="chips">${quick.map(q => `<button class="chip" data-act="padd" data-id="${q.id}">${esc(q.name)} <em>${q.g}</em></button>`).join('') || '<button class="chip" data-go="food">Log</button>'}</div></div>`);
   }
-  const g = goalOn(t);
-  if (g) {
-    const tot = totalOn(t);
-    parts.push(tot >= g ? `<span class="ok">Protein goal hit</span> (${num(tot)} g)` : `<b>${num(g - tot)} g</b> protein to go`);
-  }
-  const ws = weekScore(weekStart(t));
-  if (ws) {
-    const daysLeft = 7 - ((now.getDay() + 6) % 7) - 1;
-    const left = ws.need - ws.got;
-    parts.push(left <= 0 ? `<span class="ok">Training week complete</span>` : `<b>${left}</b> session${left > 1 ? 's' : ''} left this week${daysLeft ? ` · ${daysLeft} day${daysLeft > 1 ? 's' : ''} to go` : ' · last day'}`);
-  }
-  $('summary').innerHTML = parts.length ? parts.join(' &nbsp;·&nbsp; ') : `${now.toLocaleDateString('en-IE', { weekday: 'long', day: 'numeric', month: 'long' })}. Add a habit, a protein goal or your weekly sessions to get started.`;
+  activeTypes(ws).forEach(x => {
+    const n = exCount(x.id, ws);
+    if (n >= x.target) return;
+    rows.push(`<div class="trow" data-id="${x.id}"><span class="tico">${x.target - n}</span>
+      <div style="min-width:0"><div class="hname">${esc(x.name)}</div><div class="sub">${n} of ${x.target} this week</div></div>
+      <button class="plus" data-act="eplus" aria-label="Log ${esc(x.name)} today" data-tip="Log a session today">+</button></div>`);
+  });
+  const anything = hs.length || goal || exTypes().length;
+  $('todoMeta').textContent = rows.length ? `${rows.length} left` : '';
+  $('todo').innerHTML = rows.length ? rows.join('')
+    : anything ? '<div class="alldone">Everything done for today. Good work.</div>'
+    : '<div class="empty">Nothing set up yet. Add habits, a protein goal and your weekly sessions using the tabs above.</div>';
 }
 
 function renderEx() {
@@ -944,6 +1006,17 @@ $('eList').addEventListener('focusout', e => {
   }, 0);
 });
 $('eList').addEventListener('keydown', e => { if (e.target.tagName === 'INPUT' && e.key === 'Enter') e.target.blur(); });
+
+// home
+$('v-home').addEventListener('click', e => {
+  const go = e.target.closest('[data-go]');
+  if (go) { S.tab = go.dataset.go; S.sel = todayK(); try { history.replaceState(null, '', '#' + S.tab); } catch (err) {} render(); window.scrollTo(0, 0); return; }
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const t = todayK(), row = b.closest('[data-id]'), id = row && row.dataset.id;
+  if (b.dataset.act === 'htick') toggle(id, t);
+  else if (b.dataset.act === 'padd') { const q = cfg().presets.find(x => x.id === b.dataset.id); if (q) addFood(q.name, q.g, t); }
+  else if (b.dataset.act === 'eplus') exBump(id, t, (exOn(t)[id] || 0) + 1);
+});
 
 // chart: click bar -> jump to day
 ['hChart', 'fChart', 'eChart'].forEach(id => $(id).addEventListener('click', e => {
